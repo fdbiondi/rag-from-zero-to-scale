@@ -164,12 +164,14 @@ const fused = reciprocalRankFusion([
 
 ### Comparación offline de configuraciones
 
-Un experimento real necesita guardar datos de referencia y medir más de una dimensión. El siguiente pseudocódigo es intencional: `evaluate` representa una herramienta propia y `cases` un conjunto etiquetado; no forman parte del proyecto. Mantener fijo el orden y la carga hace más legible la comparación. En una evaluación estadística, además se debe estimar incertidumbre y evitar conclusiones a partir de pocas consultas.
+Un experimento real necesita guardar datos de referencia y medir más de una dimensión. El siguiente pseudocódigo es intencional: `evaluate` representa una herramienta propia y `cases` un conjunto etiquetado; no forman parte del proyecto ni fueron ejecutados. Compara una sola variable principal, `topK`; ambas variantes mantienen recuperación vectorial y reranking desactivado, con los demás parámetros y casos constantes. En una evaluación estadística, además se debe estimar incertidumbre y evitar conclusiones a partir de pocas consultas.
 
 ```js
-const baseline = await evaluate(cases, { retrieval: 'vector', topK: 8 });
+const baseline = await evaluate(cases, {
+  retrieval: 'vector', topK: 8, rerank: false
+});
 const candidate = await evaluate(cases, {
-  retrieval: 'hybrid-rrf', topK: 20, rerankTopN: 8
+  retrieval: 'vector', topK: 20, rerank: false
 });
 
 console.table([
@@ -180,7 +182,7 @@ console.table([
 ]);
 ```
 
-**Qué hace:** compara una configuración vectorial con otra híbrida y con reranking. **Por qué:** hace visible el compromiso, en vez de mostrar sólo una puntuación. **Cómo funciona:** ambas variantes reciben los mismos casos y producen métricas equivalentes. **Cuándo conviene:** antes de cambiar una ruta de recuperación o modelo. **Resultado esperado:** una comparación que permite inspeccionar mejoras y regresiones. El ejemplo no calcula intervalos de confianza, costo real ni métricas de generación; esos componentes requieren una implementación y datos verificables.
+**Qué hace:** plantea una comparación vectorial con `topK` 8 frente a 20, sin reranking. **Por qué:** aislar una variable principal permite atribuir diferencias observadas a ese cambio, sujeto a variabilidad de la evaluación. **Cómo funciona:** ambas variantes reciben los mismos casos y mantienen iguales el método de recuperación, el estado de reranking y los demás parámetros. **Cuándo conviene:** al investigar si ampliar candidatos mejora la recuperación y si el costo adicional resulta aceptable. **Resultado esperado:** métricas comparables para inspeccionar; el pseudocódigo no incluye resultados medidos ni garantiza una mejora. Una comparación híbrida o con fusión RRF, y una evaluación de reranking, requieren experimentos separados. El ejemplo no calcula intervalos de confianza, costo real ni métricas de generación; esos componentes requieren una implementación y datos verificables.
 
 ### Despliegue gradual y reversión
 
