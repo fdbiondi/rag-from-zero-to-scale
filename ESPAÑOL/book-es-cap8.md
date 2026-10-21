@@ -112,6 +112,18 @@ Content-Type: application/json
 
 La respuesta esperada es una lista de puntos con puntajes y payload; no significa que el backend de muestra implemente este filtro. Antes de desplegar una consulta filtrada, crear los índices apropiados y ensayar tanto resultados como restricciones de acceso. Las versiones de API pueden cambiar; confirmar la ruta en la documentación de Qdrant correspondiente al despliegue utilizado.
 
+Si después de la búsqueda se vuelve a leer el contenido desde un almacén relacional por el ID del fragmento, esa lectura también debe limitarse en el servidor por el `tenant_id` obtenido de la identidad autenticada y validada, además del documento y fragmento solicitados. El ID de un resultado y los filtros aplicados en la interfaz no autorizan el acceso. Este SQL es **conceptual y no ejecutado**; usa la tabla `rag_chunks` definida a continuación y parámetros enlazados por el driver:
+
+```sql
+SELECT content
+FROM rag_chunks
+WHERE tenant_id = $1
+  AND document_id = $2
+  AND id = $3;
+```
+
+El servidor debe asignar `$1` desde la identidad validada y comprobar que el documento y el fragmento solicitados pertenecen a ese tenant. El ejemplo de backend del repositorio no implementa autenticación ni autorización; este patrón describe un control que una aplicación real debe diseñar y probar.
+
 ### Un esquema relacional alternativo
 
 Si la organización ya opera PostgreSQL, pgvector puede guardar embeddings y metadata en una tabla SQL. El siguiente SQL es **conceptual**: supone que la extensión está instalada, que la versión admite los operadores usados y que existe una política de tenant aplicada por el servidor o por Row-Level Security. La dimensión `1536` es ilustrativa; debe coincidir con el modelo y configuración reales.
