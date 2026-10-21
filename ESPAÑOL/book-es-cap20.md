@@ -107,27 +107,58 @@ Los logs deben evitar tokens de acceso, claves API y cuerpos completos. Los mens
 
 ### Reproducción mínima desde Node.js
 
-Una reproducción útil reduce el problema a una pregunta y configuración controladas. El ejemplo siguiente utiliza el endpoint del proyecto y muestra las fuentes devueltas. El texto es de demostración; en un entorno real reemplázalo por un caso permitido y evita guardar la salida sensible. Ejecutarlo requiere tener el servicio local levantado; en este capítulo no se ejecutó ni se validó contra contenedores.
+Una reproducción útil reduce el problema a una pregunta y configuración controladas. El ejemplo siguiente se ejecuta desde el host contra el endpoint publicado del proyecto y clasifica los fallos de la consulta sin imprimir el cuerpo de respuesta. El texto es de demostración; en un entorno real reemplázalo por un caso permitido y evita guardar la salida sensible. Ejecutarlo requiere tener el servicio local levantado; este ejemplo no se ejecutó ni se validó. Los apartados anteriores tratan la versión de Node y la conectividad host/contenedor; este bloque se limita a los errores de `fetch` de la consulta HTTP.
 
 ```js
-const response = await fetch('http://localhost:3001/api/query', {
-  method: 'POST',
-  headers: { 'content-type': 'application/json' },
-  body: JSON.stringify({ question: 'How long is the warranty?' })
-});
+const controller = new AbortController();
+const timeoutMs = 1500; // Valor corto e ilustrativo; ajustarlo al entorno real.
+const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
-const result = await response.json();
-console.log({
-  status: response.status,
-  sourceCount: result.sources?.length ?? 0,
-  sourceNames: result.sources?.map(source => source.name) ?? [],
-  answer: result.answer
-});
+try {
+  const response = await fetch('http://localhost:3001/api/query', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ question: 'How long is the warranty?' }),
+    signal: controller.signal
+  });
+
+  if (!response.ok) {
+    console.error(`La consulta respondió HTTP ${response.status}.`);
+    process.exitCode = 1;
+  } else {
+    let result;
+    try {
+      result = await response.json();
+    } catch (error) {
+      if (controller.signal.aborted) throw error;
+      console.error('La respuesta HTTP exitosa no contiene JSON válido.');
+      process.exitCode = 1;
+    }
+
+    if (result !== undefined && (!result || typeof result !== 'object' || Array.isArray(result))) {
+      console.error('La respuesta JSON no tiene la forma de objeto esperada.');
+      process.exitCode = 1;
+    } else if (result !== undefined) {
+      console.log({
+        status: response.status,
+        sourceCount: Array.isArray(result.sources) ? result.sources.length : 0,
+        hasAnswer: typeof result.answer === 'string'
+      });
+    }
+  }
+} catch {
+  if (controller.signal.aborted) {
+    console.error(`La consulta superó el timeout ilustrativo de ${timeoutMs} ms.`);
+  } else {
+    console.error('No se pudo conectar con la API de consulta.');
+  }
+  process.exitCode = 1;
+} finally {
+  clearTimeout(timeout);
+}
 ```
 
-**Qué hace:** ejecuta una consulta HTTP y resume sus fuentes y respuesta. **Por qué:** desacopla un posible fallo de React y permite inspeccionar el contrato de la API. **Cómo funciona:** envía JSON y transforma la respuesta en un objeto. **Cuándo conviene:** cuando el navegador falla o se necesita una reproducción consistente. **Resultado esperado:** estado HTTP, cantidad/nombres de fuentes y respuesta. Para datos sensibles, quita `answer` de la salida o redacta contenido; el nombre de fuente tampoco siempre es seguro para registrar.
-
-Este script no distingue un body no JSON, timeout, error de red ni status no exitoso. Para un diagnóstico automatizado, agrega manejo separado de esos casos y un timeout razonable; evita convertir cualquier excepción en `sources: []`, porque eso confundiría falla técnica con búsqueda vacía. El endpoint actual del repositorio devuelve `502` cuando falla un upstream y expone detalle sólo fuera de producción.
+**Qué hace:** ejecuta una consulta HTTP y resume sólo metadatos mínimos de éxito. **Por qué:** desacopla un posible fallo de React y permite inspeccionar el contrato de la API sin imprimir respuestas o nombres de fuentes. **Cómo funciona:** separa timeout, error de red, estado HTTP no exitoso y cuerpo exitoso que no se puede parsear como JSON; sólo consulta `sources` y `answer` después de validar el estado y parsear. **Cuándo conviene:** cuando el navegador falla o se necesita una reproducción consistente desde el host. **Resultado esperado:** un mensaje seguro que identifica la clase de fallo, o el estado y conteo de fuentes de una respuesta JSON. El timeout es ilustrativo, no una recomendación de producción. Evita convertir cualquier excepción en `sources: []`, porque eso confundiría una falla técnica con una búsqueda vacía. El endpoint actual devuelve `502` cuando falla un upstream y expone detalle sólo fuera de producción. El ejemplo no se ejecutó ni validó.
 
 ### Comprobar dependencias desde el entorno adecuado
 
