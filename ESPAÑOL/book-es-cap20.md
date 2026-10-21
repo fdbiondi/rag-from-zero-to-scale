@@ -131,7 +131,7 @@ Este script no distingue un body no JSON, timeout, error de red ni status no exi
 
 ### Comprobar dependencias desde el entorno adecuado
 
-Desde la máquina local, los comandos pueden ayudar a saber si los procesos están disponibles:
+Desde la máquina local, estos comandos comprueban los servicios publicados en puertos del host. En particular, las URL con `localhost` prueban la conexión desde la máquina local; no comprueban si el contenedor `backend` puede alcanzar a Qdrant u Ollama por la red de Compose:
 
 ```bash
 docker compose -f docker-compose.dev.yml ps
@@ -141,6 +141,15 @@ curl -fsS http://localhost:11434/api/tags
 ```
 
 **Qué hacen:** muestran servicios Compose, prueban el proceso Express y consultan Qdrant y Ollama. **Por qué:** separan “API apagada” de “servicio local no accesible”. **Cómo funcionan:** cada llamada consulta un endpoint simple; `-f` hace que curl devuelva error ante estados HTTP fallidos. **Cuándo convienen:** diagnóstico inicial del entorno local, no como prueba completa de consulta. **Resultado esperado:** respuesta de salud y listados JSON accesibles. La salud de proceso no confirma que el modelo requerido esté descargado, que la colección tenga la dimensión correcta ni que la consulta produzca evidencia útil.
+
+Para probar la conectividad desde `backend`, primero deben estar iniciados los servicios de Compose y el contenedor `backend` debe estar ejecutándose con Node.js 22, como en `docker-compose.dev.yml`. Estos comandos usan los nombres de servicio y las URL internas configuradas allí. Son **ejemplos no ejecutados ni validados en esta tarea**:
+
+```bash
+docker compose -f docker-compose.dev.yml exec backend node -e 'fetch("http://qdrant:6333/collections").then(r => { console.log("HTTP", r.status); if (!r.ok) process.exitCode = 1; }).catch(err => { console.error(err.message); process.exitCode = 1; })'
+docker compose -f docker-compose.dev.yml exec backend node -e 'fetch("http://ollama:11434/api/tags").then(r => { console.log("HTTP", r.status); if (!r.ok) process.exitCode = 1; }).catch(err => { console.error(err.message); process.exitCode = 1; })'
+```
+
+**Resultado esperado:** ambos comandos reciben una respuesta HTTP exitosa (`2xx`) desde el servicio correspondiente; Ollama puede devolver una lista vacía si todavía no tiene modelos descargados, y eso no invalida esta comprobación de conectividad. Un código de salida distinto de cero indica que falló esa comprobación: revisa que los servicios estén activos, la red de Compose y los logs del servicio señalado. Un resultado exitoso sólo confirma acceso a esos endpoints desde `backend`; no prueba una consulta RAG completa ni la disponibilidad del modelo requerido.
 
 En Kubernetes, ejecuta verificaciones desde el namespace y la red donde corre el backend. `localhost` dentro de un contenedor significa ese contenedor, no la laptop ni otro servicio. Usa el nombre DNS del Service, revisa endpoints, eventos y logs con permisos apropiados. El ejemplo Kind del repositorio sólo despliega la API; Qdrant y Ollama deben estar accesibles por separado para que una consulta integral funcione. No interpretes un pod `Running` como sinónimo de aplicación lista.
 
