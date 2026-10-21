@@ -94,10 +94,22 @@ Una encuesta «¿te gustó?» es una señal, no una prueba de calidad. Una perso
 
 ### React: fuentes, estados y feedback
 
-Este componente muestra una respuesta, fuentes y estados vacíos. Supone que la API ya autorizó cada fuente. Los valores `url`, `title` y `excerpt` deben validarse y no son un mecanismo de autorización.
+Este componente muestra una respuesta, fuentes y estados vacíos. Supone que la API ya autorizó cada fuente. Los valores `url`, `title` y `excerpt` deben validarse y no son un mecanismo de autorización. La validación de URL en el cliente sólo decide si presenta un enlace activo: no concede acceso. El servidor debe volver a autorizar cada apertura y puede responder que la fuente ya no está disponible si cambiaron los permisos o se borró.
 
 ```jsx
-function Result({ status, answer, sources, onRetry, onFeedback }) {
+// Conceptual: sólo admite mismo origen o HTTPS hacia un origen permitido.
+function safeSourceUrl(rawUrl, allowedOrigins) {
+  try {
+    const url = new URL(rawUrl, window.location.origin);
+    const sameOrigin = url.origin === window.location.origin;
+    const allowedHttps = url.protocol === 'https:' && allowedOrigins.has(url.origin);
+    return sameOrigin || allowedHttps ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
+function Result({ status, answer, sources, allowedOrigins = new Set(), onRetry, onFeedback }) {
   if (status === 'loading') return <p role="status">Buscando en tus fuentes…</p>;
   if (status === 'error') return (
     <div role="alert">
@@ -115,12 +127,17 @@ function Result({ status, answer, sources, onRetry, onFeedback }) {
     <article>
       <p>{answer}</p>
       <h2>Pasajes consultados</h2>
-      <ol>{sources.map((source, i) => (
-        <li key={source.id ?? i}>
-          <a href={source.url}>{source.title}</a>
-          <blockquote>{source.excerpt}</blockquote>
-        </li>
-      ))}</ol>
+      <ol>{sources.map((source, i) => {
+        const href = safeSourceUrl(source.url, allowedOrigins);
+        return (
+          <li key={source.id ?? i}>
+            {href
+              ? <a href={href}>{source.title}</a>
+              : <span>{source.title} (cita no disponible)</span>}
+            <blockquote>{source.excerpt}</blockquote>
+          </li>
+        );
+      })}</ol>
       <button onClick={() => onFeedback('useful')}>Útil</button>
       <button onClick={() => onFeedback('needs_review')}>Necesita revisión</button>
     </article>
@@ -128,7 +145,7 @@ function Result({ status, answer, sources, onRetry, onFeedback }) {
 }
 ```
 
-**Qué hace:** representa estados claros y conecta una salida con pasajes originales. **Por qué se usa:** reduce la confusión entre ausencia de evidencia y falla, y permite verificar. **Cómo funciona:** React elige una vista por estado; `role="status"` y `role="alert"` facilitan la comunicación accesible. **Cuándo conviene:** cuando hay una operación asíncrona de búsqueda o generación y una respuesta basada en fuentes. **Resultado esperado:** el usuario sabe qué está ocurriendo, puede revisar las fuentes y enviar feedback. El ejemplo es ilustrativo; debe integrarse con el estado real del producto y validarse con herramientas de accesibilidad.
+**Qué hace:** representa estados claros y conecta una salida con pasajes originales. **Por qué se usa:** reduce la confusión entre ausencia de evidencia y falla, y permite verificar. **Cómo funciona:** React elige una vista por estado; `role="status"` y `role="alert"` facilitan la comunicación accesible. Una URL como `javascript:alert(1)` no supera la validación y se muestra como cita no disponible, sin ancla activa. **Cuándo conviene:** cuando hay una operación asíncrona de búsqueda o generación y una respuesta basada en fuentes. **Resultado esperado:** el usuario sabe qué está ocurriendo, puede revisar las fuentes y enviar feedback. El ejemplo es ilustrativo y no está integrado; el servidor aún debe autorizar cada apertura y comunicar cuando una fuente fue borrada o dejó de estar disponible. Debe validarse con herramientas de accesibilidad.
 
 No actualices un mensaje `aria-live` en cada fragmento de streaming. Puedes acumular la respuesta y anunciar un estado como «respuesta completa»; en paralelo, deja el contenido navegable y una opción de detener generación. Respeta `prefers-reduced-motion` si hay animaciones.
 
