@@ -52,12 +52,13 @@ El diagrama representa el camino feliz de la muestra. En una implementación rea
 
 Un contrato JSON define los campos aceptados y devueltos. La ruta de ingesta recibe `name` y `text`; la de consulta recibe `question`. Un cliente debe poder aprender qué enviar sin conocer Ollama, Qdrant ni el proveedor que se seleccione. Los contratos deberían documentar tipos, límites, campos opcionales, estados y ejemplos. En sistemas que evolucionan, versionar o extender el contrato con compatibilidad evita romper clientes desplegados por separado.
 
-| Caso | Estado adecuado en la muestra | Motivo |
+| Caso | Estado adecuado o recomendado | Motivo |
 |---|---:|---|
 | Ingesta aceptada | `201 Created` | Se creó una representación indexada |
 | Consulta atendida | `200 OK` | La solicitud se procesó, incluso si la respuesta expresa falta de evidencia |
 | Entrada inválida | `400 Bad Request` | El cliente puede corregir tipo, contenido o longitud |
 | Dependencia ascendente fallida | `502 Bad Gateway` | La API no pudo completar el trabajo por un servicio externo |
+| La API o proxy agota su espera por una respuesta upstream | `504 Gateway Timeout` | El intermediario no recibió una respuesta a tiempo; el trabajo downstream puede continuar |
 | Error de autenticación (si se agrega) | `401 Unauthorized` | Falta identidad válida |
 | Identidad sin permiso (si se agrega) | `403 Forbidden` o `404` según política | La operación no está autorizada |
 | Límite excedido (si se agrega) | `429 Too Many Requests` | El cliente debe reducir o espaciar solicitudes |
@@ -140,6 +141,16 @@ No existe una transacción común entre una base de documentos, un proveedor de 
 ### Ajustar tiempos y concurrencia
 
 El helper de `core.js` usa un timeout de 120 segundos en `fetch`. Un límite evita dejar solicitudes pendientes indefinidamente, pero debe elegirse según el modelo y el tamaño esperado. Si la API permite concurrencia ilimitada, varias consultas simultáneas pueden consumir la RAM disponible o saturar un proveedor. El backend de muestra no incorpora rate limiting, cola ni semáforo de inferencia. En producción hay que medir latencia p50/p95, volumen y límites del proveedor; luego definir presupuestos por operación.
+
+Los presupuestos de espera del navegador, la API/proxy y el proveedor son límites distintos. Coordinarlos ayuda a devolver un error útil antes de que una capa exterior cierre la conexión, pero vencer un plazo no demuestra que las capas internas hayan detenido el trabajo:
+
+| Límite que vence | Qué deja de esperar | Qué puede seguir ejecutándose | Qué puede inferir el cliente |
+|---|---|---|---|
+| Cliente (por ejemplo, `fetch`) | El navegador deja de esperar y puede abortar su solicitud local | La API y el proveedor pueden seguir procesando si la cancelación no llega o no se propaga | No recibió respuesta; no sabe si el servidor terminó. El aborto del cliente no confirma una cancelación ni que sea seguro repetir una operación con efectos o costo |
+| API o proxy | El intermediario deja de esperar y, si puede responder, devuelve `504 Gateway Timeout` | La API, una tarea interna o el proveedor pueden continuar si no se cancelaron efectivamente | `504` indica que el intermediario agotó su plazo, no que el trabajo haya sido revertido |
+| Llamada de la API al proveedor | La API deja de esperar la dependencia; según el error y el mapeo de la tabla, responde `502 Bad Gateway` | El proveedor podría seguir procesando si no recibió o no respetó la cancelación | `502` indica un fallo de dependencia, no una búsqueda válida sin evidencia |
+
+Una consulta procesada sin evidencia sigue siendo una respuesta válida del endpoint y usa `200 OK` según la tabla; no es timeout ni error técnico. Los presupuestos y mapeos anteriores son recomendaciones conceptuales. La demo fija 120 segundos para sus llamadas internas con `fetch`, pero no expone un timeout configurable ni coordina plazos con cliente o proxy; tampoco implementa cancelación efectiva de extremo a extremo. El ejemplo de [timeout de `fetch` del capítulo 20](book-es-cap20.md) muestra cómo detectar el vencimiento en el cliente, sin afirmar que eso detenga el trabajo del servidor.
 
 Los reintentos deben reservarse para errores transitorios y tener límite y espera creciente. Reintentar automáticamente una solicitud no idempotente puede duplicar efectos; los puntos deterministas mitigan algunas repeticiones de escritura, pero no resuelven todos los pasos ni costos de llamadas al modelo. Los timeouts también crean ambigüedad: el servidor puede haber completado el trabajo aunque el cliente ya haya cerrado la conexión.
 
