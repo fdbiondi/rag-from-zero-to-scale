@@ -142,7 +142,7 @@ curl -fsS http://localhost:11434/api/tags
 
 **Qué hacen:** muestran servicios Compose, prueban el proceso Express y consultan Qdrant y Ollama. **Por qué:** separan “API apagada” de “servicio local no accesible”. **Cómo funcionan:** cada llamada consulta un endpoint simple; `-f` hace que curl devuelva error ante estados HTTP fallidos. **Cuándo convienen:** diagnóstico inicial del entorno local, no como prueba completa de consulta. **Resultado esperado:** respuesta de salud y listados JSON accesibles. La salud de proceso no confirma que el modelo requerido esté descargado, que la colección tenga la dimensión correcta ni que la consulta produzca evidencia útil.
 
-Para probar la conectividad desde `backend`, primero deben estar iniciados los servicios de Compose y el contenedor `backend` debe estar ejecutándose con Node.js 22, como en `docker-compose.dev.yml`. Estos comandos usan los nombres de servicio y las URL internas configuradas allí. Son **ejemplos no ejecutados ni validados en esta tarea**:
+Para probar la conectividad desde `backend`, primero deben estar iniciados los servicios de Compose y el contenedor `backend` debe estar ejecutándose con Node.js 22, según la imagen definida en `backend/Dockerfile`. Estos comandos usan los nombres de servicio y las URL internas configuradas en `docker-compose.dev.yml`. Son **ejemplos no ejecutados ni validados en esta tarea**:
 
 ```bash
 docker compose -f docker-compose.dev.yml exec backend node -e 'fetch("http://qdrant:6333/collections").then(r => { console.log("HTTP", r.status); if (!r.ok) process.exitCode = 1; }).catch(err => { console.error(err.message); process.exitCode = 1; })'
