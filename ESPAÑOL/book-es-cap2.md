@@ -118,7 +118,8 @@ La selección debería equilibrar relevancia, cobertura y redundancia. Un result
 El siguiente fragmento ilustra cómo podría priorizarse el corte por párrafos antes de recurrir a una ventana fija. Es **código conceptual**, incompleto: no trata tokenización, tablas ni excepciones de tamaño. No sustituye la función existente ni fue ejecutado.
 
 ```js
-// Conceptual: agrupa párrafos completos hasta un límite aproximado de caracteres.
+// Conceptual: agrupa párrafos completos sin que la suma objetivo supere el límite.
+// Un párrafo individual más largo se conserva entero, así que puede excederlo.
 function agruparParrafos(texto, maxCaracteres = 1200) {
   const parrafos = texto.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
   const grupos = [];
@@ -135,7 +136,7 @@ function agruparParrafos(texto, maxCaracteres = 1200) {
 }
 ```
 
-**Qué hace:** conserva párrafos completos mientras caben en un límite aproximado. **Cuándo usarlo:** como punto de partida para documentos donde los párrafos ya representan unidades de sentido. **Resultado esperado:** una lista de textos que no corta párrafos, salvo cuando un párrafo individual supera el límite. En una implementación real habría que dividir ese párrafo, agregar solapamiento controlado y medir tokens con el tokenizador del modelo.
+**Qué hace:** conserva párrafos completos y sólo los combina si el grupo resultante cabe en el límite aproximado. El límite no es un máximo absoluto: si un párrafo individual ya lo supera, se conserva entero y ese grupo queda por encima. **Cuándo usarlo:** como punto de partida para documentos donde los párrafos ya representan unidades de sentido. **Resultado esperado para el caso largo:** con `maxCaracteres = 1200` y una entrada formada por un único párrafo de 1201 caracteres, devuelve una lista con ese párrafo intacto; su único elemento mide 1201 caracteres. Así no se pierde texto, pero el objetivo de tamaño no se cumple. Para imponer un máximo estricto habría que dividir párrafos largos (con una regla explícita para elegir cortes), posiblemente agregar solapamiento controlado y medir tokens con el tokenizador del modelo. Este fragmento sigue siendo conceptual e incompleto; el comportamiento descrito es el esperado según el algoritmo, no un resultado de ejecución o validación.
 
 ### Generar embeddings y verificar el contrato
 
