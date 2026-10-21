@@ -153,6 +153,10 @@ El código de muestra utiliza un solo `status` para ingesta y consulta. Si el us
 
 Una lista de fuentes debe usar una clave estable. El ejemplo utiliza el índice de arreglo como `key`, suficiente para una lista estática pequeña pero menos apropiado si los elementos se insertan o reordenan. Si la API provee identidad de documento y posición, esa combinación puede servir como clave. No se debe crear un enlace a un archivo privado sólo desde el nombre recibido: el servidor debe validar permiso al abrirlo.
 
+Para producción, conviene acordar un contrato conceptual de fuente que incluya un identificador estable, título o nombre del documento, versión o fecha, sección o página, un `excerpt` breve y una `url` opcional. La interfaz presenta el excerpt como texto: React escapa una cadena interpolada como `{source.excerpt}`; no la conviertas en HTML con `dangerouslySetInnerHTML`. La URL también es dato no confiable. Antes de habilitar navegación, parseala y permití sólo el esquema seguro `https:`; rechazá, por ejemplo, `javascript:alert(1)`, además de valores malformados o esquemas como `data:`. Si no pasa la validación, mostrá la cita sin enlace.
+
+Este es un criterio de diseño, no una capacidad de la demo. Abrir el enlace debe volver a comprobar en el servidor la identidad y autorización vigentes para ese documento; haber recibido una cita o excerpt en una consulta anterior no concede acceso posterior. Si el recurso fue eliminado o ya no está disponible, conservá los datos de cita recibidos y comunicá claramente que no se puede abrir la fuente. No presentes una copia del excerpt como si el documento siguiera accesible ni afirmes que no existe cuando el servidor no puede confirmarlo.
+
 ```jsx
 function Sources({ sources }) {
   if (!sources?.length) return <p>No se recibieron pasajes fuente.</p>;
@@ -174,6 +178,8 @@ function Sources({ sources }) {
 ```
 
 **Qué hace:** muestra textos que el backend recuperó junto con metadatos simples. **Por qué se usa:** el usuario puede inspeccionar de qué pasajes depende la respuesta. **Cómo funciona:** React itera el arreglo y renderiza un elemento por resultado. **Cuándo conviene:** en interfaces de preguntas donde la trazabilidad importa. **Resultado esperado:** respuesta y evidencia visibles, sin presentar la puntuación como probabilidad de corrección. Es conceptual y asume que `position` existe, como en el contrato actual.
+
+En la demo, la fuente contiene los campos simples `name`, `text`, `position` y `score`; no hay autenticación ni permisos, ni un flujo que valide enlaces o autorice la apertura de documentos. El contrato ampliado y las comprobaciones anteriores son recomendaciones para una aplicación protegida, no una descripción del comportamiento ejecutado por este ejemplo.
 
 ### Presentación de errores y estados vacíos
 
