@@ -48,19 +48,21 @@ La figura muestra la ruta de una respuesta. En la práctica, la recuperación y 
 
 ### Qué debe formar parte de la clave
 
-La clave identifica un resultado lógico. Para un embedding de texto, debería distinguir modelo, revisión, dimensión, normalización y contenido. Para una respuesta final, también importan la pregunta normalizada, el corpus o versión de los documentos, filtros de acceso, configuración del recuperador, versión del prompt, modelo generativo y parámetros de generación. Si cualquiera de esas entradas cambia, el resultado anterior puede no corresponder a la solicitud nueva.
+La clave identifica un resultado lógico. Para un embedding de texto, debería distinguir modelo, revisión, dimensión, normalización y contenido. Para una respuesta final, también importan la pregunta canonicalizada, su `locale`, la versión de la regla de canonicalización, el corpus o versión de los documentos, filtros de acceso, configuración del recuperador, versión del prompt, modelo generativo y parámetros de generación. La canonicalización debe ser determinista y aplicarse con la misma regla al escribir y consultar la caché. Sólo debe unificar diferencias de representación que no cambien la consulta: conservar acentos, negaciones, cifras, identificadores, distinciones del idioma y cualquier otra diferencia que pueda alterar la recuperación o la respuesta. Versionar la regla permite invalidar entradas cuando cambia esa semántica. Si cualquiera de esas entradas cambia, el resultado anterior puede no corresponder a la solicitud nueva.
+
+El campo `locale` ya forma parte de las consultas de [`datos/evaluacion.jsonl`](../datos/evaluacion.jsonl); el set actual usa `es`. Reutilizá ese valor al evaluar y no infieras el idioma únicamente desde el texto: la misma cadena puede producir resultados distintos según el locale declarado.
 
 El aislamiento de usuarios merece atención especial. Dos usuarios con permisos diferentes pueden formular la misma pregunta. Si la caché de respuesta se identifica sólo por el texto de esa pregunta, una persona puede recibir una respuesta construida con pasajes que sólo otra persona podía consultar. La clave debería incluir un identificador seguro de ámbito de autorización, o el diseño debería guardar únicamente resultados que sean verdaderamente públicos y aplicar el filtrado antes de servirlos. Incluir el `tenantId` provisto libremente por el navegador no demuestra que ese usuario pertenezca al tenant.
 
-No es necesario concatenar información sensible en texto plano como clave. Se puede normalizar una representación canónica y calcular un hash criptográfico. El hash reduce exposición accidental en las herramientas de inspección, pero no transforma un dato de baja entropía en secreto; una pregunta común puede adivinarse probando hashes. También hay que limitar el tamaño de claves y valores y no almacenar tokens de autenticación.
+No es necesario concatenar información sensible en texto plano como clave. Para una respuesta, calculá `questionHash` sobre la pregunta canonicalizada; mantené `locale` y `canonicalizationVersion` como componentes explícitos de la clave. Un hash criptográfico reduce exposición accidental en herramientas de inspección, pero no transforma un dato de baja entropía en secreto: una pregunta común puede adivinarse probando hashes. También hay que limitar el tamaño de claves y valores y no almacenar tokens de autenticación.
 
 Una clave conceptual para una respuesta podría componerse así:
 
 ```text
-answer:v3:<scopeHash>:<indexVersion>:<retrieverConfig>:<promptVersion>:<chatModel>:<questionHash>
+answer:v4:<scopeHash>:<indexVersion>:<retrieverConfig>:<promptVersion>:<chatModel>:<locale>:<canonicalizationVersion>:<questionHash>
 ```
 
-La versión inicial `v3` funciona como un interruptor de invalidación global: si el formato o semántica de la clave cambian, se incrementa la versión y las entradas anteriores dejan de consultarse. La caducidad posterior libera espacio. Si la clave no incorpora un dato de vigencia relevante, agregar `v3` no corrige esa omisión.
+La versión de clave `v4` funciona como un interruptor de invalidación global: si el formato o semántica de la clave cambian, se incrementa esa versión y las entradas anteriores dejan de consultarse. `canonicalizationVersion` es independiente: identifica la regla determinista usada para preparar la pregunta. `scopeHash` debe derivarse del ámbito de autorización resuelto por el servidor a partir de una identidad validada; no debe confiar en un `tenantId` libre enviado por el cliente. La caducidad posterior libera espacio. Si la clave no incorpora un dato de vigencia relevante, agregar una versión no corrige esa omisión.
 
 ### Frescura e invalidación
 
