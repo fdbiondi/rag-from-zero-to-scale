@@ -57,6 +57,19 @@ La comparación debe mantener constantes el corpus, la limpieza, los fragmentos,
 | Privacidad | ¿Dónde se procesa y qué retención aplica? | Contrato, región y configuración del servicio |
 | Operación | ¿Podemos monitorear, versionar y cambiar de proveedor? | Adaptador propio, telemetría y procedimiento de migración |
 
+Para que la comparación sea repetible, usá el corpus existente de [`datos/documentos.jsonl`](../datos/documentos.jsonl) y el set de consultas anotadas de [`datos/evaluacion.jsonl`](../datos/evaluacion.jsonl), siguiendo la receta y las métricas de [`EVALUACION_RAG.md`](../EVALUACION_RAG.md). Conservá iguales el corpus, los fragmentos, filtros y consultas; registrá cada modelo en un índice separado. La matriz siguiente es una plantilla de trabajo, no un benchmark ya ejecutado:
+
+| Dato | Candidato A | Candidato B |
+|---|---|---|
+| Fecha UTC, revisión del corpus/set, runtime y hardware, proveedor/modelo/versión, lote, `topK` y filtros | `<pendiente de registrar según EVALUACION_RAG.md>` | `<pendiente de registrar según EVALUACION_RAG.md>` |
+| Idioma y dominio evaluados | Español; documentación sintética de Nébula sobre operaciones, personas, compras y seguridad | Igual corpus y set que A |
+| Dimensiones, límites de entrada/lote y cuotas | `<pendiente de verificar y registrar>` | `<pendiente de verificar y registrar>` |
+| Costo de indexación y costo por consulta | `<pendiente de estimar con volumen y condiciones registrados>` | `<pendiente de estimar con volumen y condiciones registrados>` |
+| Latencia de indexación y consulta (por etapa y total) | `<pendiente de medir>` | `<pendiente de medir>` |
+| Política de datos: región, retención y uso para entrenamiento | `<pendiente de verificar para el servicio y contrato concretos>` | `<pendiente de verificar para el servicio y contrato concretos>` |
+
+Los datos de calidad y operación sólo se completan después de ejecutar la misma evaluación y guardar su configuración. Este capítulo propone un protocolo de comparación: no presenta un ranking actual de productos, una revisión vigente de sus condiciones ni resultados medidos. Verificá documentación y términos del candidato al momento de decidir; no completes las celdas pendientes con cifras de memoria o estimaciones sin supuestos explícitos.
+
 ### Clases de despliegue y sus intercambios
 
 Una API gestionada reduce el trabajo de instalar modelos, mantener aceleradores y escalar inferencia. A cambio, el texto sale de nuestra infraestructura, dependemos de conectividad y cuotas, y debemos considerar latencia externa, cambios de contrato y costos de uso. Antes de enviar documentos confidenciales hay que revisar las condiciones vigentes del proveedor, la región, la retención y las obligaciones de la organización; «API» no significa automáticamente que un dato se almacene ni que no se almacene.
