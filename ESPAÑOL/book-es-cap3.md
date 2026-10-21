@@ -131,7 +131,7 @@ En consulta, si el modelo generativo está caído pero la búsqueda funciona, ta
 
 El servidor incluido en `backend/src/server.js` ofrece `GET /health`, `POST /api/ingest` y `POST /api/query`. La ingesta comprueba nombre de hasta 180 caracteres y texto no vacío de hasta 100.000 caracteres. La consulta requiere una pregunta de hasta 2.000 caracteres. Ante errores de servicios upstream responde 502; el detalle sólo aparece fuera de producción. Esto es un ejemplo concreto de límites en el borde de la API.
 
-Las solicitudes ilustrativas siguientes corresponden a los contratos del README. Se espera que la primera de escritura devuelva un `documentId` y cantidad de chunks; la consulta devuelve `answer` y `sources`. El contenido exacto y los identificadores dependen de modelos y datos. **No se ejecutaron en esta tarea** y no equivalen a una validación de integración.
+Las solicitudes ilustrativas siguientes corresponden a los contratos del README; consultá también sus [ejemplos HTTP](../README.md#http-examples--ejemplos-http). Se espera que la primera de escritura devuelva un `documentId` y cantidad de chunks; la consulta devuelve `answer` y `sources`. La forma de los campos se contrastó con `backend/src/server.js` y `backend/src/core.js`, pero los valores de respuesta que siguen son **sintéticos**, no resultados observados. **El recorrido no se ejecutó en esta tarea** y los ejemplos no equivalen a una validación de integración.
 
 ```bash
 # Desde la raíz, con el entorno del repositorio iniciado.
@@ -150,6 +150,34 @@ curl -fsS -X POST http://localhost:3001/api/query \
   -d '{"question":"¿Cuánto dura la garantía?"}'
 # Esperado: JSON con answer y sources.
 ```
+
+Una forma de éxito **sintética** (HTTP 200) es:
+
+```json
+{
+  "answer": "La garantía dura dos años desde la fecha de compra.",
+  "sources": [
+    {
+      "name": "manual.txt",
+      "text": "La garantía dura dos años desde la fecha de compra.",
+      "position": 0,
+      "score": 0.912
+    }
+  ]
+}
+```
+
+Los errores también tienen cuerpo JSON. Si falta una pregunta válida, el servidor responde HTTP 400; si falla una dependencia upstream, responde HTTP 502. Estas formas son **sintéticas**:
+
+```json
+{"error":"question required (max 2000 chars)"}
+```
+
+```json
+{"error":"upstream service failed","detail":"mensaje variable de la dependencia"}
+```
+
+El valor de `detail` depende del error y se omite en producción; allí el cuerpo 502 contiene sólo `error`.
 
 **Qué hace:** envía una pregunta a la ruta de recuperación y generación. **Cuándo usarlo:** después de una ingesta exitosa y con los servicios disponibles. **Resultado esperado:** respuesta fundamentada y lista de pasajes. El ejemplo no demuestra aislamiento por usuario ni una abstención calibrada; esos requisitos no están implementados en el backend educativo.
 
