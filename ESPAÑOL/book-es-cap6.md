@@ -67,11 +67,12 @@ En el ejemplo, `API` se toma de `import.meta.env.VITE_API_URL` o usa `http://loc
 ```js
 const API = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
-async function call(path, body) {
+async function call(path, body, signal) {
   const response = await fetch(`${API}${path}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
+    signal
   });
   const data = await response.json();
   if (!response.ok) throw new Error(data.detail || data.error || 'HTTP error');
@@ -79,7 +80,7 @@ async function call(path, body) {
 }
 ```
 
-**Qué hace:** encapsula solicitudes JSON y convierte códigos no exitosos en errores manejables. **Por qué se usa:** hace que ambos formularios llamen el mismo contrato sin conocer el proveedor RAG. **Cómo funciona:** `fetch` envía `POST`; luego el helper parsea JSON y revisa `ok`. **Cuándo conviene:** en una aplicación pequeña con pocos endpoints y respuesta JSON uniforme. **Resultado esperado:** un objeto JavaScript o una excepción que el formulario puede mostrar. El patrón refleja `frontend/src/main.jsx`; en una aplicación robusta también manejaría respuestas no JSON, timeout, cancelación y validación de estructura.
+**Qué hace:** encapsula solicitudes JSON y convierte códigos no exitosos en errores manejables; acepta opcionalmente un `AbortSignal` para cancelar la espera del navegador. **Por qué se usa:** hace que ambos formularios llamen el mismo contrato sin conocer el proveedor RAG. **Cómo funciona:** `fetch` envía `POST`; luego el helper parsea JSON y revisa `ok`. **Cuándo conviene:** en una aplicación pequeña con pocos endpoints y respuesta JSON uniforme. **Resultado esperado:** un objeto JavaScript o una excepción que el formulario puede mostrar. El patrón refleja `frontend/src/main.jsx`; en una aplicación robusta también manejaría respuestas no JSON, timeout y validación de estructura.
 
 Los nombres `VITE_*` no son secretos. Vite sustituye estas variables durante la construcción para que el navegador conozca la URL. La URL del backend es información de configuración pública; una clave de OpenAI, un token de base vectorial o una contraseña nunca debe almacenarse allí. La autenticación se implementa con un flujo diseñado para el usuario, y las credenciales de servicio permanecen en el servidor.
 
@@ -111,24 +112,40 @@ La validación del navegador sólo mejora la experiencia. El cliente puede modif
 
 ### Estados de carga sin carreras
 
-Una interfaz puede iniciar una segunda consulta antes de que termine la primera. Si ambas respuestas llegan fuera de orden, una respuesta antigua podría sobrescribir la nueva. Para consultas repetidas se puede cancelar la solicitud anterior con `AbortController` o identificar cada operación. La cancelación detiene la espera del navegador, pero no garantiza que el servidor haya detenido embeddings o generación; para liberar esos recursos el backend también necesita propagar cancelación.
+Una interfaz puede iniciar una segunda consulta antes de que termine la primera. Si ambas respuestas llegan fuera de orden, una respuesta antigua podría sobrescribir la nueva. Este ejemplo conceptual cancela la solicitud anterior e identifica cada operación: el identificador impide actualizar estado desde una respuesta vieja incluso si la cancelación llega tarde. Ignora `AbortError`, que indica una cancelación esperada, y aborta la solicitud activa al desmontar el componente. Cancelar en el navegador no garantiza que el servidor haya detenido embeddings o generación; para liberar esos recursos, el backend también debe detectar y propagar la cancelación.
 
 ```jsx
 const [queryState, setQueryState] = useState({ status: 'idle', result: null, error: '' });
+const activeController = useRef(null);
+const requestId = useRef(0);
+
+useEffect(() => () => {
+  requestId.current += 1; // invalida cualquier respuesta pendiente
+  activeController.current?.abort();
+  activeController.current = null;
+}, []);
 
 async function ask(event) {
   event.preventDefault();
+  activeController.current?.abort();
+  const controller = new AbortController();
+  activeController.current = controller;
+  const thisRequest = ++requestId.current;
   setQueryState({ status: 'loading', result: null, error: '' });
   try {
-    const result = await call('/api/query', { question });
+    const result = await call('/api/query', { question }, controller.signal);
+    if (thisRequest !== requestId.current) return;
     setQueryState({ status: 'success', result, error: '' });
   } catch (error) {
+    if (error.name === 'AbortError' || thisRequest !== requestId.current) return;
     setQueryState({ status: 'error', result: null, error: error.message });
+  } finally {
+    if (thisRequest === requestId.current) activeController.current = null;
   }
 }
 ```
 
-**Qué hace:** representa estados de carga, éxito y error de manera explícita. **Por qué se usa:** la interfaz puede mostrar una acción coherente y no confundir resultados viejos con nuevos. **Cómo funciona:** cada transición reemplaza un objeto de estado que incluye sólo datos pertinentes. **Cuándo conviene:** cuando hay una operación asíncrona con más de dos resultados posibles. **Resultado esperado:** la vista puede renderizar un indicador, una respuesta o un error mutuamente excluyentes. Es conceptual y omite la protección contra solicitudes fuera de orden.
+**Qué hace:** representa estados de carga, éxito y error, y evita que una consulta anterior reemplace el resultado actual. **Por qué se usa:** evita mostrar respuestas fuera de orden. **Cómo funciona:** al comenzar otra consulta se aborta la anterior; el identificador protege el estado si una respuesta alcanza a completarse de todos modos. El cleanup invalida y cancela la solicitud activa al desmontar. **Cuándo conviene:** cuando una persona puede enviar otra consulta antes de que termine la anterior. **Resultado esperado:** sólo la consulta más reciente puede actualizar la vista; una cancelación no aparece como error. Este fragmento es conceptual y no ejecutado. Por ejemplo, si se envía «contrato» y luego «factura» antes de que termine la primera, se aborta «contrato» y, aunque su respuesta llegue tarde, sólo «factura» puede actualizar el estado. El navegador cancela su solicitud, pero el backend debe propagar esa señal para intentar detener embeddings o generación.
 
 El código de muestra utiliza un solo `status` para ingesta y consulta. Si el usuario puede iniciar ambas tareas, una operación podría ocultar el estado de la otra. Mantener `ingestState` y `queryState` separados es una evolución sencilla. Cuando existan más operaciones, los hooks propios o una biblioteca de datos remotos pueden gestionar caché, reintentos y cancelación; conviene adoptarlos cuando la complejidad lo justifique.
 
