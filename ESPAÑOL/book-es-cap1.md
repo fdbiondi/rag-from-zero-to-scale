@@ -41,12 +41,21 @@ flowchart LR
     F[Pregunta] --> G[Embedding de consulta]
     G --> H[Recuperación de candidatos]
     E --> H
-    H --> I[Contexto seleccionado]
-    I --> J[Modelo generativo]
-    F --> J
-    J --> K[Respuesta y fuentes]
+    H --> I{¿Recuperación exitosa?}
+    I -- No: error --> J[Devolver error controlado]
+    I -- Sí --> K{¿Hay candidatos?}
+    K -- No --> L[Abstenerse: no hay evidencia]
+    K -- Sí --> M[Filtrar candidatos por permisos]
+    M --> N{¿Queda evidencia autorizada?}
+    N -- No --> L
+    N -- Sí --> O[Construir contexto autorizado]
+    O --> P[Modelo generativo]
+    F --> P
+    P --> Q[Respuesta y fuentes]
   end
 ```
+
+Los permisos se aplican antes de construir el contexto y entregarlo al modelo. El LLM redacta con la evidencia autorizada; no decide quién puede acceder a los documentos.
 
 La biblioteca es una analogía útil si se entiende hasta dónde llega. Los documentos son libros; la preparación crea un catálogo que permite localizar fragmentos; el buscador trae páginas relacionadas; el modelo redacta una síntesis. Un bibliotecario puede traer el libro equivocado, y un lector puede interpretar mal una página. Del mismo modo, RAG puede recuperar información irrelevante o generar una conclusión que la evidencia no sostiene. La analogía explica el flujo, no garantiza su calidad.
 
