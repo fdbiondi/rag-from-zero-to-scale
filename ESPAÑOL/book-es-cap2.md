@@ -186,7 +186,18 @@ function crearMensajes(question, chunks) {
 
 ### Un experimento controlado
 
-Para ajustar fragmentación, no cambies al mismo tiempo modelo de embeddings, tamaño de pasaje, métrica y prompt. Elegí un conjunto de consultas con sus fuentes esperadas y registrá una línea base. Luego modifica una sola variable y compara:
+Para estudiar fragmentación, usá el caso conductor de Nébula y los artefactos compartidos: el corpus de [`datos/documentos.jsonl`](../datos/documentos.jsonl), las consultas con fuentes esperadas de [`datos/evaluacion.jsonl`](../datos/evaluacion.jsonl) y el protocolo de [`EVALUACION_RAG.md`](../EVALUACION_RAG.md). No hace falta crear otro corpus ni copiar sus preguntas. Para comparar recuperación de fragmentos sirven las consultas respondibles `q-001` a `q-004`, `q-008`, `q-009` y `q-012`: cubren versiones históricas, procedimientos, una cadena adversarial y respuestas con más de una condición. `q-005`, `q-006`, `q-007`, `q-010` y `q-011` son casos de denegación o abstención; no entran en Recall, aunque deben seguir revisándose para detectar fugas y errores de disposición.
+
+Primero registrá una línea base con la configuración y receta indicadas en `EVALUACION_RAG.md`, incluido el commit o hash del corpus y del set. Después repetí la corrida cambiando una sola variable de fragmentación —por ejemplo, tamaño o solapamiento— y conservá iguales las demás: modelos, métrica, `topK`, filtros, prompt y condiciones de ejecución. Anotá la versión del chunker, tamaño, solapamiento y cualquier otra configuración necesaria para reproducir e interpretar ambas corridas. La plantilla de esa guía sirve para el registro completo; esta tabla resume la comparación pedagógica:
+
+| Corrida | Chunker, tamaño y solapamiento | Variable modificada | Recall@k según `EVALUACION_RAG.md` | Observaciones y consultas que cambiaron |
+|---|---|---|---|---|
+| Línea base | `<registrar configuración>` | Ninguna; referencia | `<pendiente de medir>` | `<pendiente de observar>` |
+| Variante | `<registrar configuración>` | `<una sola variable>` | `<pendiente de medir>` | `<pendiente de observar>` |
+
+Según `EVALUACION_RAG.md`, Recall@k es la proporción de consultas respondibles que tienen al menos una fuente esperada entre los primeros k resultados. La versión esperada también importa: para `q-001` y `q-002` no son intercambiables. Reportá el valor de cada corrida sólo después de ejecutarla; los marcadores de la tabla no son resultados. Revisá además cobertura, redundancia, fidelidad y seguridad por separado: una métrica agregada no compensa recuperar una versión incorrecta ni una fuente prohibida.
+
+Al comparar las corridas, preguntá:
 
 - **Recuperación:** ¿cuántas veces aparece el pasaje relevante entre los primeros k candidatos?
 - **Cobertura:** ¿el contexto recuperado incluye todas las condiciones necesarias?
@@ -194,7 +205,7 @@ Para ajustar fragmentación, no cambies al mismo tiempo modelo de embeddings, ta
 - **Fidelidad:** ¿cada afirmación de la respuesta se sostiene en evidencia citada?
 - **Operación:** ¿cuánto tarda y cuánto cuesta indexar y consultar?
 
-Una tabla simple basta para empezar: versión de chunking, tamaño, solapamiento, número de candidatos, resultado esperado, candidatos observados, respuesta y observaciones. Registrá los casos que empeoraron; de lo contrario, sólo recordarás los éxitos. Cuando una modificación mejore un grupo y dañe otro, decidí qué tipo de error tiene mayor costo y si conviene usar una estrategia híbrida.
+Registrá también candidatos observados, ranking y fuentes/versiones esperadas siguiendo la guía. Anotá los casos que empeoraron; de lo contrario, sólo recordarás los éxitos. Cuando una modificación mejore un grupo y dañe otro, decidí qué tipo de error tiene mayor costo y si conviene usar una estrategia híbrida.
 
 ### Buenas prácticas de versiones
 
@@ -221,7 +232,7 @@ Como regla práctica, empieza con una estrategia sencilla, conserva una línea b
 2. Dividí un párrafo con una regla y dos excepciones usando ventanas de 80 caracteres. Identificá qué información se pierde en los cortes.
 3. Proponé metadatos para un corpus de políticas con versiones históricas, autor y vigencia. Señalá cuáles deberían servir para filtrar y cuáles para citar.
 4. Diseñá cinco preguntas donde búsqueda léxica debería superar a vectorial y cinco donde la semántica pueda ayudar. Incluí códigos y paráfrasis.
-5. Definí un experimento para comparar fragmentos de 300, 700 y 1200 caracteres, con y sin solapamiento. Especificá qué resultado medirías antes de elegir.
+5. Proponé una comparación de fragmentación usando las consultas respondibles existentes de `datos/evaluacion.jsonl` y el corpus de `datos/documentos.jsonl`. Definí una línea base, elegí una variante que cambie una sola variable y anotá qué configuración conservarías para interpretar la corrida. Usá la plantilla anterior y el protocolo de `EVALUACION_RAG.md` para Recall@k; dejá métricas y observaciones como pendientes hasta ejecutar. Revisá por separado los casos de abstención, denegación y seguridad.
 6. Redactá instrucciones para que el modelo conteste con citas y se abstenga. Después enumerá controles que deben implementarse fuera del prompt.
 
 ## Referencias y continuidad
