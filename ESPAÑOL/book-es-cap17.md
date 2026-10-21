@@ -99,8 +99,10 @@ Este componente muestra una respuesta, fuentes y estados vacíos. Supone que la 
 ```jsx
 // Conceptual: sólo admite mismo origen o HTTPS hacia un origen permitido.
 function safeSourceUrl(rawUrl, allowedOrigins) {
+  if (typeof rawUrl !== 'string' || rawUrl.trim() === '') return null;
   try {
     const url = new URL(rawUrl, window.location.origin);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
     const sameOrigin = url.origin === window.location.origin;
     const allowedHttps = url.protocol === 'https:' && allowedOrigins.has(url.origin);
     return sameOrigin || allowedHttps ? url.href : null;
@@ -145,7 +147,7 @@ function Result({ status, answer, sources, allowedOrigins = new Set(), onRetry, 
 }
 ```
 
-**Qué hace:** representa estados claros y conecta una salida con pasajes originales. **Por qué se usa:** reduce la confusión entre ausencia de evidencia y falla, y permite verificar. **Cómo funciona:** React elige una vista por estado; `role="status"` y `role="alert"` facilitan la comunicación accesible. Una URL como `javascript:alert(1)` no supera la validación y se muestra como cita no disponible, sin ancla activa. **Cuándo conviene:** cuando hay una operación asíncrona de búsqueda o generación y una respuesta basada en fuentes. **Resultado esperado:** el usuario sabe qué está ocurriendo, puede revisar las fuentes y enviar feedback. El ejemplo es ilustrativo y no está integrado; el servidor aún debe autorizar cada apertura y comunicar cuando una fuente fue borrada o dejó de estar disponible. Debe validarse con herramientas de accesibilidad.
+**Qué hace:** representa estados claros y conecta una salida con pasajes originales. **Por qué se usa:** reduce la confusión entre ausencia de evidencia y falla, y permite verificar. **Cómo funciona:** React elige una vista por estado; `role="status"` y `role="alert"` facilitan la comunicación accesible. Una URL como `javascript:alert(1)`, `blob:https://app.example/...` o un valor ausente (`undefined`) no supera la validación y se muestra como cita no disponible, sin ancla activa. **Cuándo conviene:** cuando hay una operación asíncrona de búsqueda o generación y una respuesta basada en fuentes. **Resultado esperado:** el usuario sabe qué está ocurriendo, puede revisar las fuentes y enviar feedback. El ejemplo es ilustrativo y no está integrado; el servidor aún debe autorizar cada apertura y comunicar cuando una fuente fue borrada o dejó de estar disponible. Debe validarse con herramientas de accesibilidad.
 
 No actualices un mensaje `aria-live` en cada fragmento de streaming. Puedes acumular la respuesta y anunciar un estado como «respuesta completa»; en paralelo, deja el contenido navegable y una opción de detener generación. Respeta `prefers-reduced-motion` si hay animaciones.
 
