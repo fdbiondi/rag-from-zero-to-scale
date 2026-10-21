@@ -57,13 +57,13 @@ Un contrato JSON define los campos aceptados y devueltos. La ruta de ingesta rec
 | Ingesta aceptada | `201 Created` | Se creó una representación indexada |
 | Consulta atendida | `200 OK` | La solicitud se procesó, incluso si la respuesta expresa falta de evidencia |
 | Entrada inválida | `400 Bad Request` | El cliente puede corregir tipo, contenido o longitud |
-| Dependencia ascendente fallida | `502 Bad Gateway` | La API no pudo completar el trabajo por un servicio externo |
+| Otro fallo de una dependencia ascendente | `502 Bad Gateway` | La API no pudo completar el trabajo por un servicio externo |
 | La API o proxy agota su espera por una respuesta upstream | `504 Gateway Timeout` | El intermediario no recibió una respuesta a tiempo; el trabajo downstream puede continuar |
 | Error de autenticación (si se agrega) | `401 Unauthorized` | Falta identidad válida |
 | Identidad sin permiso (si se agrega) | `403 Forbidden` o `404` según política | La operación no está autorizada |
 | Límite excedido (si se agrega) | `429 Too Many Requests` | El cliente debe reducir o espaciar solicitudes |
 
-La muestra responde `502` para errores capturados y oculta `detail` cuando `NODE_ENV` es `production`. Para una API de producción se recomienda un esquema estable de error con un identificador de solicitud, y no retornar mensajes crudos de proveedores, nombres internos ni contenido del documento. Los detalles completos se registran de forma controlada en el servidor, con redacción apropiada.
+La muestra responde `502` para todas las excepciones que llegan al middleware y oculta `detail` cuando `NODE_ENV` es `production`. Para una API de producción se recomienda un esquema estable de error con un identificador de solicitud, y no retornar mensajes crudos de proveedores, nombres internos ni contenido del documento. Los detalles completos se registran de forma controlada en el servidor, con redacción apropiada.
 
 ### Validación: formato, límites y significado
 
@@ -148,9 +148,9 @@ Los presupuestos de espera del navegador, la API/proxy y el proveedor son límit
 |---|---|---|---|
 | Cliente (por ejemplo, `fetch`) | El navegador deja de esperar y puede abortar su solicitud local | La API y el proveedor pueden seguir procesando si la cancelación no llega o no se propaga | No recibió respuesta; no sabe si el servidor terminó. El aborto del cliente no confirma una cancelación ni que sea seguro repetir una operación con efectos o costo |
 | API o proxy | El intermediario deja de esperar y, si puede responder, devuelve `504 Gateway Timeout` | La API, una tarea interna o el proveedor pueden continuar si no se cancelaron efectivamente | `504` indica que el intermediario agotó su plazo, no que el trabajo haya sido revertido |
-| Llamada de la API al proveedor | La API deja de esperar la dependencia; según el error y el mapeo de la tabla, responde `502 Bad Gateway` | El proveedor podría seguir procesando si no recibió o no respetó la cancelación | `502` indica un fallo de dependencia, no una búsqueda válida sin evidencia |
+| Llamada de la API al proveedor | La API deja de esperar la respuesta upstream y, según el contrato recomendado, devuelve `504 Gateway Timeout` | El proveedor podría seguir procesando si no recibió o no respetó la cancelación | `504` indica que venció el plazo esperando al proveedor, no que la búsqueda haya terminado sin evidencia |
 
-Una consulta procesada sin evidencia sigue siendo una respuesta válida del endpoint y usa `200 OK` según la tabla; no es timeout ni error técnico. Los presupuestos y mapeos anteriores son recomendaciones conceptuales. La demo fija 120 segundos para sus llamadas internas con `fetch`, pero no expone un timeout configurable ni coordina plazos con cliente o proxy; tampoco implementa cancelación efectiva de extremo a extremo. El ejemplo de [timeout de `fetch` del capítulo 20](book-es-cap20.md) muestra cómo detectar el vencimiento en el cliente, sin afirmar que eso detenga el trabajo del servidor.
+Una consulta procesada sin evidencia sigue siendo una respuesta válida del endpoint y usa `200 OK` según la tabla; no es timeout ni error técnico. Los presupuestos y mapeos anteriores son recomendaciones conceptuales. En la demo, `core.js` fija `AbortSignal.timeout(120000)` para llamadas internas con `fetch`; cuando vence, la excepción llega al middleware global y se convierte en `502`, igual que las demás excepciones capturadas. Ese límite no es configurable ni está coordinado con cliente o proxy, y no hay cancelación efectiva de extremo a extremo. Por eso el `504` recomendado para un timeout esperando al proveedor todavía no coincide con la respuesta de la demo. El ejemplo de [timeout de `fetch` del capítulo 20](book-es-cap20.md) muestra cómo detectar el vencimiento en el cliente, sin afirmar que eso detenga el trabajo del servidor.
 
 Los reintentos deben reservarse para errores transitorios y tener límite y espera creciente. Reintentar automáticamente una solicitud no idempotente puede duplicar efectos; los puntos deterministas mitigan algunas repeticiones de escritura, pero no resuelven todos los pasos ni costos de llamadas al modelo. Los timeouts también crean ambigüedad: el servidor puede haber completado el trabajo aunque el cliente ya haya cerrado la conexión.
 
